@@ -1,6 +1,6 @@
 package main 
 
-import ("fmt"; "io"; "encoding/json"; "errors"; "net/http"; "strconv"; "strings"; "github.com/julienschmidt/httprouter")
+import ("fmt"; "greenligh/internal/validator"; "io"; "encoding/json"; "errors"; "net/http"; "net/url"; "strconv"; "strings"; "github.com/julienschmidt/httprouter")
 
 type envelope map[string]any
 
@@ -11,7 +11,6 @@ func (app *application) readIDParam( r *http.Request) (int64, error){
 	if err != nil || id < 1{
 		return 0, errors.New("Invalid id parameter")
 	}
-
 	return id, nil
 }
 
@@ -87,4 +86,35 @@ func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any
 		return fmt.Errorf("body must contain only a single JSON value")
 	}
 	return nil
+}
+
+func (app *application) readInt(v *validator.Validator,qr url.Values, key string, defaultValue int) int {
+	param := qr.Get(key)
+	if param == ""{
+		return defaultValue
+	}
+
+	paramInt, err := strconv.Atoi(param)
+	if err != nil{
+		v.AddError(key, "must be an integer value")
+		return defaultValue
+	}
+	return paramInt
+}
+
+func (app *application) readString(qr url.Values, key string, defaultValue string) string{
+	param := qr.Get(key)
+	if param == ""{
+		return defaultValue
+	}
+	return param
+}
+
+func (app *application) readCSV(qr url.Values, key string, defaultValue []string) []string{
+	csv := qr.Get(key)
+	if csv == ""{
+		return defaultValue 
+	}
+
+	return strings.Split(csv, ",")
 }

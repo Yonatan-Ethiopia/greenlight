@@ -79,9 +79,9 @@ func (app *application) updateMovieHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var input struct{
-		Title string	`json:"title"`
-		Year int32		`json:"year"`
-		Runtime data.Runtime	`json:"runtime"`
+		Title *string	`json:"title"`
+		Year *int32		`json:"year"`
+		Runtime *data.Runtime	`json:"runtime"`
 		Genres []string	`json:"genres"`
 	}
 	
@@ -90,26 +90,42 @@ func (app *application) updateMovieHandler(w http.ResponseWriter, r *http.Reques
 		app.badRequestError(w, r, err)
 	}
 
-	movie := data.Movie{
-		ID: id,
-		Title: input.Title,
-		Year: input.Year,
-		Runtime: input.Runtime,
-		Genres: input.Genres,
+	movie,err := app.models.Movies.Get(id)
+	if err != nil{
+		switch{
+			case errors.Is(err, data.ErrRecordNotFound):
+				app.notFoundError(w, r)
+				return
+			default:
+				app.serverErrorResponse(w, r, err)
+				return
+		}
 	}
-	
+
+	if input.Title != nil{
+		movie.Title = *input.Title 
+	}
+	if input.Year != nil{
+		movie.Year = *input.Year 
+	}
+	if input.Runtime != nil{
+		movie.Runtime = *input.Runtime
+	}
+	if input.Genres != nil{
+		movie.Genres = input.Genres
+	}
 	v := validator.New()
-	data.ValidateMovie(v, &movie)
+	data.ValidateMovie(v, movie)
 
 	if !v.Valid(){
 		app.failedValidationResponse(w, r, v.Errors)
 	}
 
-	err = app.models.Movies.Update(&movie)
+	err = app.models.Movies.Update(movie)
 	if err != nil{
 		switch{
-			case errors.Is(err, data.ErrRecordNotFound):
-				app.notFoundError(w,r)
+			case errors.Is(err, data.ErrEditConflict):
+				app.editConflictResponse(w,r)
 				return
 			default:
 				app.serverErrorResponse(w, r, err)
@@ -149,4 +165,30 @@ func (app *application) deleteHandler(w http.ResponseWriter, r *http.Request){
 		return
 	}
 	return
+}
+
+func (app *application) listMoviesHandler(w http.ResponseWriter, r *http.Request){
+	var input struct{
+		Title string 
+		Genres []string 
+		Page int 
+		PageSize int 
+		Sort string
+	}
+	params := r.URL.Query()
+	input.Title = app.readString(params, "title", "")
+	input.Genres = app.readCSV(params, "genres", []string{})
+
+	v := validator.New()
+	input.Page = app.readInt(v, params, "page", 1)
+	input.PageSize = app.readInt(v, params, "page_size", 20)
+
+	input.Sort = app.readString(params, "sort", "id")
+
+	if !v.Valid(){
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+	fmt.Fprintf(w, "%+v\n", input)
+
 }
