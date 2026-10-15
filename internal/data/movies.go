@@ -18,6 +18,12 @@ type MovieModel struct{
 	DB *sql.DB
 }
 
+type MovieFilter struct{
+	Title string
+	Year  int
+	Genres []string
+	Filters
+}
 func (m MovieModel) Insert(movie *Movie)error{
 	query := `
 		INSERT INTO movies (title, year, runtime, genres)
@@ -121,4 +127,43 @@ func ValidateMovie(v *validator.Validator, input *Movie){
 	v.Check(len(input.Genres) <= 5, "Genres", "must not be more than 5")
 
 	v.Check(validator.Unique(input.Genres), "Genres", "must not contain duplicate genres")
+}
+
+func (m *MovieModel) ListMovies(filters *MovieFilter) ([]*Movie, error){
+	query := `
+		SELECT id, created_at, title, year, runtime, genres, versions FROM movies 
+		WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '')
+		AND (genres @> $2 OR $2 = '{}')
+		ORDER BY id 
+	`
+	movies := []*Movie{}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := m.DB.QueryContext(ctx, query, filters.Title, pq.Array(filters.Genres))
+	if err != nil{
+		return nil, err 
+	}
+
+	defer rows.Close()
+
+	for rows.Next(){
+		m := &Movie{}
+
+		err = rows.Scan(&m.ID, &m.CreatedAt, &m.Title, &m.Year, &m.Runtime, pq.Array(&m.Genres), &m.Versions)
+		if err != nil{
+			return nil, err
+		}
+
+		movies = append(movies, m)
+
+	}
+	if err = rows.Err(); err != nil{
+		return nil, err 
+	}
+
+	return movies, nil
+
+
+
 }

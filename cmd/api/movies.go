@@ -2,6 +2,13 @@ package main
 
 import  ("fmt"; "errors"; "net/http"; "greenligh/internal/data"; "greenligh/internal/validator")
 
+type MovieFilter struct{
+	Title string
+	Year  int 
+	Genres []string 
+	data.Filters
+}
+
 func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Request){
 	var input struct{
 		Title	string	`json:"title"`
@@ -168,27 +175,34 @@ func (app *application) deleteHandler(w http.ResponseWriter, r *http.Request){
 }
 
 func (app *application) listMoviesHandler(w http.ResponseWriter, r *http.Request){
-	var input struct{
-		Title string 
-		Genres []string 
-		Page int 
-		PageSize int 
-		Sort string
-	}
+	var filters data.MovieFilter
 	params := r.URL.Query()
-	input.Title = app.readString(params, "title", "")
-	input.Genres = app.readCSV(params, "genres", []string{})
+	filters.Title = app.readString(params, "title", "")
+	filters.Genres = app.readCSV(params, "genres", []string{})
 
 	v := validator.New()
-	input.Page = app.readInt(v, params, "page", 1)
-	input.PageSize = app.readInt(v, params, "page_size", 20)
+	filters.Filters.Page = app.readInt(v, params, "page", 1)
+	filters.Filters.PageSize = app.readInt(v, params, "page_size", 20)
 
-	input.Sort = app.readString(params, "sort", "id")
+	filters.Filters.Sort = app.readString(params, "sort", "id")
+
+	filters.Filters.SortSafeList = []string{"id", "title", "year", "runtime", "-id", "-title", "-year", "-runtime"}
 
 	if !v.Valid(){
 		app.failedValidationResponse(w, r, v.Errors)
 		return
 	}
-	fmt.Fprintf(w, "%+v\n", input)
+	movies, err := app.models.Movies.ListMovies(&filters)
+	if err != nil{
+		app.serverErrorResponse(w, r, err) 
+		return
+	}
 
+	err = app.writeJSON(w, http.StatusOK, envelope{"movies": movies}, nil)
+	if err != nil{
+		app.serverErrorResponse(w, r, err) 
+		return
+	}
+
+	return
 }
