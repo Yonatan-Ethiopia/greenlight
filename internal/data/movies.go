@@ -1,6 +1,6 @@
 package data
 
-import ("time"; "errors"; "context"; "greenligh/internal/validator"; "github.com/lib/pq"; "database/sql")
+import ("time"; "errors"; "fmt"; "context"; "greenligh/internal/validator"; "github.com/lib/pq"; "database/sql")
 
 
 
@@ -129,20 +129,23 @@ func ValidateMovie(v *validator.Validator, input *Movie){
 	v.Check(validator.Unique(input.Genres), "Genres", "must not contain duplicate genres")
 }
 
-func (m *MovieModel) ListMovies(filters *MovieFilter) ([]*Movie, error){
-	query := `
-		SELECT id, created_at, title, year, runtime, genres, versions FROM movies 
+func (m *MovieModel) ListMovies(filters *MovieFilter) (Metadata, []*Movie, error){
+	totalRecords := 0 
+	query := fmt.Sprintf(`SELECT count(*) OVER(), id, created_at, title, year, runtime, genres, versions FROM movies 
 		WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '')
 		AND (genres @> $2 OR $2 = '{}')
-		ORDER BY id 
-	`
+		ORDER BY %s %s, id ASC
+		LIMIT $3 
+		OFFSET $4`, filters.sortColumn(), filters.sortDirection())
+	args := []any{filters.Title, filters.Genres, filters.Filters.limit(), filters.Filters.offset()}
+
 	movies := []*Movie{}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	rows, err := m.DB.QueryContext(ctx, query, filters.Title, pq.Array(filters.Genres))
+	rows, err := m.DB.QueryContext(ctx, query, args...)
 	if err != nil{
-		return nil, err 
+		return Metadata{}, nil, err 
 	}
 
 	defer rows.Close()
@@ -150,19 +153,20 @@ func (m *MovieModel) ListMovies(filters *MovieFilter) ([]*Movie, error){
 	for rows.Next(){
 		m := &Movie{}
 
-		err = rows.Scan(&m.ID, &m.CreatedAt, &m.Title, &m.Year, &m.Runtime, pq.Array(&m.Genres), &m.Versions)
+		err = rows.Scan(&totalRecords, &m.ID, &m.CreatedAt, &m.Title, &m.Year, &m.Runtime, pq.Array(&m.Genres), &m.Versions)
 		if err != nil{
-			return nil, err
+			return Metadata{}, nil, err
 		}
 
 		movies = append(movies, m)
 
 	}
 	if err = rows.Err(); err != nil{
-		return nil, err 
+		return Metadata{}, nil, err 
 	}
 
-	return movies, nil
+	metadata := calculateMetadata(totalRecords, filters.Filters.Page, filters.Filters.PageSize)
+	return metadata, movies, nil
 
 
 
