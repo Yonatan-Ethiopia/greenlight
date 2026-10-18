@@ -1,6 +1,6 @@
 package main 
 
-import ( "flag"; "context"; "database/sql"; "fmt"; "log"; "net/http"; "os"; "time"; _ "github.com/lib/pq"; "greenligh/internal/data")
+import ( "flag"; "context"; "database/sql"; "log"; "net/http"; "os"; "time"; _ "github.com/lib/pq"; "greenligh/internal/data")
 
 const version = "1.0.0"
 
@@ -12,6 +12,11 @@ type config struct{
 		maxOpenConns int
 		maxIdleConns int
 		maxIdleTime  string
+	}
+	limiter struct {
+		rps		float64
+		burst	int
+		enabled	bool
 	}
 }
 
@@ -29,6 +34,9 @@ func main(){
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "Postgres max open connections" )
 	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", 25, "Postgres max idle connections")
 	flag.StringVar(&cfg.db.maxIdleTime, "db-max-idle-time", "15m", "Postgre max idle time")
+	flag.Float64Var(&cfg.limiter.rps, "limiter-rps", 2, "Rate limiter maximum requests per second")
+	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 4, "Rate limiter maximum burst")
+	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
 
 	flag.Parse()
 
@@ -53,17 +61,10 @@ func main(){
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/healthcheck", app.healthcheckHandler)
 
-	srv := &http.Server{
-		Addr: fmt.Sprintf(":%d", cfg.port),
-		Handler: app.routes(),
-		IdleTimeout: time.Minute,
-		ReadTimeout: 10 * time.Second,
-		WriteTimeout: 30 * time.Second,
+	err = app.serve()
+	if err != nil{
+		logger.Fatal(err)
 	}
-
-	logger.Printf("Starting %s server on %s", cfg.env, srv.Addr)
-	err = srv.ListenAndServe()
-	logger.Fatal(err)
 }
 func openDb(cfg config) (*sql.DB, error){
 	db, err := sql.Open("postgres", cfg.db.dsn)

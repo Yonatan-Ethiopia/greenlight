@@ -1,5 +1,5 @@
 package main 
-import ( "net/http")
+import ( "net/http"; "time")
 
 func (app *application) healthcheckHandler( w http.ResponseWriter, r *http.Request){
 	data := envelope{
@@ -9,7 +9,6 @@ func (app *application) healthcheckHandler( w http.ResponseWriter, r *http.Reque
 			"version": version,
 		},
 	}
-
 	err := app.writeJSON(w, http.StatusOK, data, nil)
 	if err != nil{
 		app.logger.Print(err)
