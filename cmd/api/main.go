@@ -1,6 +1,6 @@
 package main 
 
-import ( "flag"; "context"; "database/sql"; "log"; "net/http"; "os"; "time"; _ "github.com/lib/pq"; "greenligh/internal/data")
+import ( "flag"; "context"; "database/sql"; "log"; "net/http"; "os"; "time"; _ "github.com/lib/pq"; "greenligh/internal/data"; "greenligh/internal/mailer")
 
 const version = "1.0.0"
 
@@ -18,12 +18,20 @@ type config struct{
 		burst	int
 		enabled	bool
 	}
+	smtp struct{
+		host string 
+		port int 
+		username string
+		password string 
+		sender string 
+	}
 }
 
 type application struct{
 	config config 
 	logger *log.Logger
 	models data.Models
+	mailer mailer.Mailer
 }
 
 func main(){
@@ -38,6 +46,11 @@ func main(){
 	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 4, "Rate limiter maximum burst")
 	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
 
+	flag.StringVar(&cfg.smtp.host, "smtp-host", "sandbox.smtp.mailtrap.io", "SMTP host")
+	flag.IntVar(&cfg.smtp.port, "smtp-port", 25, "SMTP port")
+	flag.StringVar(&cfg.smtp.username, "smtp-username", "username", "SMTP username")
+	flag.StringVar(&cfg.smtp.password, "smtp-password", "password", "SMTP password")
+	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Greenlight <no-reply@greenligh.com>", "SMTP sender")
 	flag.Parse()
 
 	logger := log.New(os.Stdout, "", log.Ldate | log.Ltime)
@@ -57,6 +70,7 @@ func main(){
 		config: cfg,
 		logger: logger,
 		models: data.NewModel(db),
+		mailer: mailer.New(cfg.smtp.host, cfg.smtp.port, cfg.smtp.username, cfg.smtp.password, cfg.smtp.sender),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/healthcheck", app.healthcheckHandler)

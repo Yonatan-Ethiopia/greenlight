@@ -51,7 +51,7 @@ func (app *application) readJSON(w http.ResponseWriter, r *http.Request, dst any
 
 			case errors.As(err, &unmarshalTypeError):
 
-				if unmarshalTypeError.Field != ""{
+				if unmarshalTypeError.Field != "" {
 
 					return fmt.Errorf("body contains incorrect JSON type for field %q", unmarshalTypeError.Field)
 
@@ -117,4 +117,16 @@ func (app *application) readCSV(qr url.Values, key string, defaultValue []string
 	}
 
 	return strings.Split(csv, ",")
+}
+
+func (app *application) background(fn func()){
+	go func() {
+		defer func(){
+			if err := recover(); err != nil{
+				app.logger.Printf("Error from background work %v\n", err)
+			}
+		}()
+
+		fn() 
+	}()
 }
