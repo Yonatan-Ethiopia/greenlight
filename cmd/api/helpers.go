@@ -120,8 +120,10 @@ func (app *application) readCSV(qr url.Values, key string, defaultValue []string
 }
 
 func (app *application) background(fn func()){
+	app.wg.Add(1)
 	go func() {
 		defer func(){
+			app.wg.Done()
 			if err := recover(); err != nil{
 				app.logger.Printf("Error from background work %v\n", err)
 			}
