@@ -1,6 +1,6 @@
 package data 
 
-import ( "strings"; "greenligh/internal/validator"; "errors"; "context"; "database/sql"; "time"; "golang.org/x/crypto/bcrypt"; "fmt")
+import ( "strings"; "greenligh/internal/validator"; "errors"; "context"; "database/sql"; "time"; "golang.org/x/crypto/bcrypt") 
 
 type User struct{
 	ID			int64		`json:"id"`
@@ -65,7 +65,6 @@ func ValidateUser(v *validator.Validator, input *User){
 }
 
 func ValidateEmail(v *validator.Validator, email string){
-	fmt.Printf("the email is %s\n", email)
 	v.Check(email != "", "email", "must not be empty")
 	v.Check(validator.Matches(email, validator.EmailRX), "email", "must be a valid email")
 }

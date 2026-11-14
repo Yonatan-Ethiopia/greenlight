@@ -1,6 +1,6 @@
 package main 
 
-import ( "flag"; "context"; "database/sql"; "log"; "net/http"; "os"; "time"; _ "github.com/lib/pq"; "greenligh/internal/data"; "greenligh/internal/mailer")
+import ( "flag"; "context"; "database/sql"; "log"; "net/http"; "os"; "time"; _ "github.com/lib/pq"; "greenligh/internal/data"; "greenligh/internal/mailer"; "sync")
 
 const version = "1.0.0"
 
